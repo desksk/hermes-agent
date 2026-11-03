@@ -38,6 +38,10 @@ const {
 const storeMsixWhenStore = storeMsix
 const releaseBuild = Boolean(process.env.HERMES_PAYLOAD_TAG)
 
+// AISTOC ships an offline single-file NSIS installer; keep MSIX the default so
+// the upstream build path is untouched unless the AISTOC build opts in.
+const aistocNsis = process.env.AISTOC_NSIS === '1'
+
 /**
  * The store MSIX packaging identity. Callers must only invoke this when
  * `store` is true (see the invariant note above).
@@ -235,7 +239,7 @@ module.exports = {
   win: {
     executableName: windowsExecutableName,
     legalTrademarks: displayName,
-    target: ['msix'],
+    target: aistocNsis ? ['nsis'] : ['msix'],
     // The updaters' relaunch waiter is PowerShell run outside the package. The
     // sealed payload's snapshot omits scripts/, so it ships as a resource
     // (RELAUNCH_WAITER_SCRIPT in electron/updater/relaunch-waiter.ts).
@@ -277,6 +281,21 @@ module.exports = {
     // the restricted capability that permits unvirtualized AppData/HKCU writes.
     capabilities: ['unvirtualizedResources'],
     showNameOnTiles: true
+  },
+  nsis: {
+    oneClick: false,
+    perMachine: true,
+    allowElevation: true,
+    allowToChangeInstallationDirectory: false,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    shortcutName: displayName,
+    installerIcon: 'assets/icon.ico',
+    uninstallerIcon: 'assets/icon.ico',
+    installerHeaderIcon: 'assets/icon.ico',
+    artifactName: 'AISTOC-Setup-${version}-${arch}.${ext}',
+    include: '../../aistoc/branding/installer/installer.nsh',
+    deleteAppDataOnUninstall: false
   },
   linux: {
     category: 'Development',
