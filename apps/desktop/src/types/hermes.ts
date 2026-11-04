@@ -295,6 +295,7 @@ export interface CustomEndpoint {
   base_url: string
   context_length?: null | number
   discover_models: boolean
+  extra_headers?: Record<string, string>
   has_api_key: boolean
   id: string
   is_current?: boolean
@@ -302,6 +303,8 @@ export interface CustomEndpoint {
   models: string[]
   name: string
   source?: string
+  ssl_ca_cert?: string
+  ssl_verify?: boolean
 }
 
 export interface CustomEndpointsResponse {
@@ -321,12 +324,15 @@ export interface CustomEndpointUpdate {
   base_url: string
   context_length?: number
   discover_models?: boolean
+  extra_headers?: Record<string, string>
   id?: string
   make_default?: boolean
   model: string
   model_details?: CustomEndpointModelDetail[]
   models?: string[]
   name: string
+  ssl_ca_cert?: string
+  ssl_verify?: boolean
 }
 
 export interface CustomEndpointValidationResponse {
