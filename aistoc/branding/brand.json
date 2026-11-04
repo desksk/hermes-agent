@@ -1,0 +1,56 @@
+{
+  "name": "AISTOC",
+  "productName": "AISTOC Agent",
+  "appId": "com.aistoc.agent",
+  "appSlug": "aistoc",
+  "appNamePascal": "AISTOCAgent",
+  "artifactNamePascal": "AISTOC",
+  "userDataName": "AISTOC Agent",
+  "company": "AISTOC",
+  "defaultLocale": "zh",
+  "protocol": "aistoc",
+  "installDirName": "AISTOC Agent",
+  "version": "1.0.0",
+  "providers": [
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "baseUrl": "https://api.deepseek.com/v1",
+      "model": "deepseek-chat",
+      "apiMode": "chat_completions",
+      "docsUrl": "https://platform.deepseek.com/api_keys"
+    },
+    {
+      "id": "qwen",
+      "name": "通义千问",
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "model": "qwen-plus",
+      "apiMode": "chat_completions",
+      "docsUrl": "https://bailian.console.aliyun.com/"
+    },
+    {
+      "id": "zhipu",
+      "name": "智谱 GLM",
+      "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+      "model": "glm-4.5",
+      "apiMode": "chat_completions",
+      "docsUrl": "https://open.bigmodel.cn/usercenter/apikeys"
+    },
+    {
+      "id": "doubao",
+      "name": "豆包 / 火山方舟",
+      "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+      "model": "doubao-seed-1-6-250615",
+      "apiMode": "chat_completions",
+      "docsUrl": "https://console.volcengine.com/ark"
+    },
+    {
+      "id": "kimi",
+      "name": "Kimi",
+      "baseUrl": "https://api.moonshot.cn/v1",
+      "model": "moonshot-v1-8k",
+      "apiMode": "chat_completions",
+      "docsUrl": "https://platform.moonshot.cn/console/api-keys"
+    }
+  ]
+}
