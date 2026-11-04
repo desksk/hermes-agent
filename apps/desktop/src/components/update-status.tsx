@@ -333,7 +333,11 @@ export function UpdateStatusCard({
   showReleaseNotes?: boolean
   target: UpdateTarget
   version: DesktopVersionInfo | null
-}): ReactElement {
+}): ReactElement | null {
+  if (import.meta.env.VITE_AISTOC_BRAND === '1') {
+    return null
+  }
+
   // An installed bundle waiting only for a restart owns the client status; a
   // stale check error beside it contradicts it (#128195).
   if (target === 'client' && version?.bundleSwapPending) {

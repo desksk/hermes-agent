@@ -12,7 +12,8 @@ import {
 } from './registry'
 import type { BundledLocale, Locale } from './types'
 
-export const DEFAULT_LOCALE: BundledLocale = 'en'
+export const DEFAULT_LOCALE: BundledLocale =
+  import.meta.env.VITE_AISTOC_BRAND === '1' ? 'zh' : 'en'
 
 export const LOCALE_OPTIONS = [
   {
