@@ -41,10 +41,13 @@ interface EndpointForm {
   baseUrl: string
   contextLength: string
   discoverModels: boolean
+  extraHeaders: Record<string, string>
   id: string
   makeDefault: boolean
   model: string
   name: string
+  sslCaCert: string
+  sslVerify: boolean
 }
 
 // Same choices as `hermes model`'s custom-provider setup; '' = runtime auto-detect.
@@ -61,10 +64,13 @@ const EMPTY_FORM: EndpointForm = {
   baseUrl: '',
   contextLength: '',
   discoverModels: true,
+  extraHeaders: {},
   id: '',
   makeDefault: true,
   model: '',
-  name: ''
+  name: '',
+  sslCaCert: '',
+  sslVerify: true
 }
 
 function formFromEndpoint(endpoint: CustomEndpoint): EndpointForm {
@@ -74,10 +80,13 @@ function formFromEndpoint(endpoint: CustomEndpoint): EndpointForm {
     baseUrl: endpoint.base_url,
     contextLength: endpoint.context_length ? String(endpoint.context_length) : '',
     discoverModels: endpoint.discover_models,
+    extraHeaders: endpoint.extra_headers ?? {},
     id: endpoint.id,
     makeDefault: Boolean(endpoint.is_current),
     model: endpoint.model,
-    name: endpoint.name
+    name: endpoint.name,
+    sslCaCert: endpoint.ssl_ca_cert ?? '',
+    sslVerify: endpoint.ssl_verify ?? true
   }
 }
 
@@ -97,10 +106,45 @@ function toPayload(
     api_mode: form.apiMode,
     context_length: Number.isFinite(contextLength) && contextLength > 0 ? contextLength : undefined,
     discover_models: form.discoverModels,
+    extra_headers: form.extraHeaders,
     make_default: form.makeDefault,
     models: models?.length ? models : undefined,
-    model_details: modelDetails?.length ? modelDetails : undefined
+    model_details: modelDetails?.length ? modelDetails : undefined,
+    ssl_ca_cert: form.sslCaCert,
+    ssl_verify: form.sslVerify
   }
+}
+
+export function AdvancedEndpointFields({
+  headers,
+  onChange
+}: {
+  headers: string
+  onChange: (headers: Record<string, string>) => void
+}) {
+  return (
+    <div className="grid gap-2">
+      <label className="grid gap-1.5 text-xs text-muted-foreground">
+        额外 Header
+        <textarea
+          aria-label="额外 Header"
+          className="min-h-20 rounded-md border bg-background p-2 font-mono text-xs"
+          defaultValue={headers}
+          onChange={event => {
+            const parsed: Record<string, string> = {}
+            for (const line of event.target.value.split('\n')) {
+              const index = line.indexOf(':')
+              if (index > 0) {
+                parsed[line.slice(0, index).trim()] = line.slice(index + 1).trim()
+              }
+            }
+            onChange(parsed)
+          }}
+        />
+        <span className="text-xs text-muted-foreground">每行一个，格式：Header-Name: value</span>
+      </label>
+    </div>
+  )
 }
 
 export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: CustomEndpointsSettingsProps) {
@@ -477,6 +521,27 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
                 placeholder={form.id ? ce.fields.apiKeyNewPlaceholder : ce.fields.apiKeyPlaceholder}
                 type="password"
                 value={form.apiKey}
+              />
+            </label>
+            <AdvancedEndpointFields
+              headers={Object.entries(form.extraHeaders)
+                .map(([key, value]) => `${key}: ${value}`)
+                .join('\n')}
+              onChange={headers => setForm(current => ({ ...current, extraHeaders: headers }))}
+            />
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Checkbox
+                checked={form.sslVerify}
+                onCheckedChange={checked => setForm(current => ({ ...current, sslVerify: checked === true }))}
+              />
+              校验 TLS 证书（内网自签证书可关闭）
+            </label>
+            <label className="grid gap-1.5 text-xs text-muted-foreground">
+              自定义 CA 证书路径（可选）
+              <Input
+                onChange={event => setForm(current => ({ ...current, sslCaCert: event.target.value }))}
+                placeholder="C:\\certs\\internal-ca.pem"
+                value={form.sslCaCert}
               />
             </label>
             <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
