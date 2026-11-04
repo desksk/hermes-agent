@@ -132,12 +132,15 @@ export function AdvancedEndpointFields({
           defaultValue={headers}
           onChange={event => {
             const parsed: Record<string, string> = {}
+
             for (const line of event.target.value.split('\n')) {
               const index = line.indexOf(':')
+
               if (index > 0) {
                 parsed[line.slice(0, index).trim()] = line.slice(index + 1).trim()
               }
             }
+
             onChange(parsed)
           }}
         />
@@ -527,6 +530,7 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
               headers={Object.entries(form.extraHeaders)
                 .map(([key, value]) => `${key}: ${value}`)
                 .join('\n')}
+              key={form.id || 'new'}
               onChange={headers => setForm(current => ({ ...current, extraHeaders: headers }))}
             />
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -540,7 +544,7 @@ export function CustomEndpointsSettings({ onConfigSaved, onMainModelChanged }: C
               自定义 CA 证书路径（可选）
               <Input
                 onChange={event => setForm(current => ({ ...current, sslCaCert: event.target.value }))}
-                placeholder="C:\\certs\\internal-ca.pem"
+                placeholder={'C:\\certs\\internal-ca.pem'}
                 value={form.sslCaCert}
               />
             </label>

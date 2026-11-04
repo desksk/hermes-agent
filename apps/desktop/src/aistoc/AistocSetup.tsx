@@ -169,7 +169,7 @@ export function AistocSetup({
             <Input
               aria-label="自定义 CA 证书路径"
               onChange={event => setSslCaCert(event.target.value)}
-              placeholder="C:\\certs\\internal-ca.pem"
+              placeholder={'C:\\certs\\internal-ca.pem'}
               value={sslCaCert}
             />
           </label>
