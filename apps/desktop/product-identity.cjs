@@ -8,6 +8,15 @@
 /// <reference types="node" />
 'use strict'
 
+const fs = require('node:fs')
+const path = require('node:path')
+
+const brandEnabled = process.env.AISTOC_BRAND === '1'
+const brandPath = path.join(__dirname, '..', '..', 'aistoc', 'branding', 'brand.json')
+const brand = brandEnabled && fs.existsSync(brandPath)
+  ? JSON.parse(fs.readFileSync(brandPath, 'utf8'))
+  : null
+
 const variants = {
   '': { display: 'Hermes', kebab: 'hermes', pascal: 'Hermes' },
   light: {
@@ -15,11 +24,13 @@ const variants = {
     kebab: 'hermes-light',
     pascal: 'HermesLight'
   },
-  bundled: {
-    display: 'Hermes Agent',
-    kebab: 'hermes-bundled',
-    pascal: 'HermesBundled'
-  }
+  bundled: brand
+    ? { display: brand.productName, kebab: brand.appSlug, pascal: brand.appNamePascal }
+    : {
+        display: 'Hermes Agent',
+        kebab: 'hermes-bundled',
+        pascal: 'HermesBundled'
+      }
 }
 
 const variant = process.env.HERMES_DESKTOP_VARIANT || ''
@@ -66,14 +77,17 @@ const identity = {
   store,
   light,
   displayName,
-  appId: `com.nousresearch.${name.kebab}${kebabSuffix}`,
+  appId: brand ? brand.appId : `com.nousresearch.${name.kebab}${kebabSuffix}`,
   // Store and commit builds do not publish a release feed.
-  channel: store || buildCommit ? null : light ? (canary ? 'light-canary' : 'light') : (canary ? 'canary' : 'latest'),
+  channel: brand ? null : (store || buildCommit ? null : light ? (canary ? 'light-canary' : 'light') : (canary ? 'canary' : 'latest')),
   appNamePascal: `${name.pascal}${pascalSuffix}`,
-  artifactNamePascal: name.pascal,
-  windowsExecutableName: kebabSuffix ? cliName : displayName,
-  cliName,
-  msixAppIdWithOrg: `NousResearch.${name.pascal}${pascalSuffix}`,
+  artifactNamePascal: brand ? brand.artifactNamePascal : name.pascal,
+  windowsExecutableName: brand ? brand.productName : (kebabSuffix ? cliName : displayName),
+  cliName: brand ? brand.appSlug : cliName,
+  msixAppIdWithOrg: brand ? `AISTOC.${name.pascal}${pascalSuffix}` : `NousResearch.${name.pascal}${pascalSuffix}`,
+  // Conditional so the upstream (non-brand) object keeps exactly its old
+  // own keys — an explicit `undefined` would change JSON round-trips.
+  ...(brand ? { userDataName: brand.userDataName } : {}),
   ...(store
     ? {
         storeMsix: {

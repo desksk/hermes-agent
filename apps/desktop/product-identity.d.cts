@@ -15,6 +15,8 @@ interface ProductIdentity {
   windowsExecutableName: string
   /** Exposed payload CLI command. */
   cliName: string
+  /** Electron userData folder name when it must be pinned (branded builds). */
+  userDataName?: string
   /** OS-level app identity w/ org prefix. e.g. "NousResearch.HermesLight" */
   msixAppIdWithOrg: string
   /** R2 identity token on channel builds; absent on legacy products. */

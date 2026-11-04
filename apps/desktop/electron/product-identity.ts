@@ -35,11 +35,11 @@ export function applyDesktopIdentity(
   },
   identity: Readonly<ProductIdentity> = PRODUCT_IDENTITY
 ): string | null {
-  if (!identity.token && identity.appNamePascal === identity.artifactNamePascal) {
+  if (!identity.token && !identity.userDataName && identity.appNamePascal === identity.artifactNamePascal) {
     return null
   }
 
-  const userData: string = path.join(app.getPath('appData'), identity.appNamePascal)
+  const userData: string = path.join(app.getPath('appData'), identity.userDataName ?? identity.appNamePascal)
   mkdirSync(userData, { recursive: true })
   app.setPath('userData', userData)
   app.setName(identity.displayName)
