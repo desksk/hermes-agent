@@ -3,6 +3,7 @@ import { atom } from 'nanostores'
 
 import { invalidateAllConnectors } from '@/app/capabilities/connectors/data/keys'
 import {
+  activateCustomEndpoint,
   cancelOAuthSession,
   getGlobalModelOptions,
   getRecommendedDefaultModel,
@@ -10,9 +11,11 @@ import {
   OAUTH_LONG_POLL_SECONDS,
   pollOAuthSession,
   type ProfileScope,
+  saveCustomEndpoint,
   setEnvVar,
   startOAuthLogin,
   submitOAuthCode,
+  validateCustomEndpoint,
   validateProviderCredential
 } from '@/hermes'
 import { translateNow } from '@/i18n'
@@ -37,7 +40,13 @@ import { afterOnboardingSurfaceClear, onboardingSurfaceOpen } from '@/store/onbo
 import { captureOnboardingScope, type OnboardingScope } from '@/store/onboarding-scope'
 import { requestRoute } from '@/store/recovery-requests'
 import { setModelPickerOpen } from '@/store/session'
-import type { AppHandoffStatus, OAuthPollResponse, OAuthProvider, OAuthStartResponse } from '@/types/hermes'
+import type {
+  AppHandoffStatus,
+  CustomEndpointUpdate,
+  OAuthPollResponse,
+  OAuthProvider,
+  OAuthStartResponse
+} from '@/types/hermes'
 
 type PkceStart = Extract<OAuthStartResponse, { flow: 'pkce' }>
 type DeviceStart = Extract<OAuthStartResponse, { flow: 'device_code' }>
@@ -1525,4 +1534,47 @@ export async function confirmOnboardingModel(ctx: OnboardingContext) {
   // screen (no-default fallthrough, local endpoint) so feedback isn't lost.
   completeDesktopOnboarding(true)
   ctx.onCompleted?.()
+}
+
+/** Save an AISTOC-configured custom endpoint through the backend's endpoint
+ *  API: probe it, persist it as the default, then activate it. Mirrors the
+ *  local-endpoint flow's probe semantics but uses the dedicated
+ *  /api/providers/custom-endpoints route so extra headers / TLS settings
+ *  survive. */
+export async function saveAistocEndpoint(
+  endpoint: CustomEndpointUpdate,
+  ctx: OnboardingContext
+): Promise<{ message?: string; needsModelInput?: boolean; ok: boolean }> {
+  try {
+    const scope = ctx.scope?.profile
+    const probe = await validateCustomEndpoint(endpoint, scope)
+    const modelKnown = probe.models?.length ? probe.models : endpoint.model ? [endpoint.model] : []
+
+    if (!probe.ok && !(probe.reachable && modelKnown.length > 0)) {
+      return probe.reachable && modelKnown.length === 0
+        ? { ok: false, message: probe.message, needsModelInput: true }
+        : { ok: false, message: probe.message }
+    }
+
+    const saved = await saveCustomEndpoint(
+      {
+        ...endpoint,
+        models: modelKnown,
+        model_details: probe.model_details,
+        make_default: true
+      },
+      scope
+    )
+
+    if (!saved.id) {
+      return { ok: false, message: '保存端点失败：后端没有返回 id' }
+    }
+
+    await activateCustomEndpoint(saved.id, scope)
+    await ctx.requestGateway('reload.env').catch(() => undefined)
+
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: errMessage(error) }
+  }
 }

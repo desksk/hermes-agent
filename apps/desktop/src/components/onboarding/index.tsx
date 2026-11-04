@@ -2,6 +2,7 @@ import type { ModelOptionProvider } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { AistocSetup } from '@/aistoc/AistocSetup'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -31,6 +32,7 @@ import {
   type OnboardingContext,
   peekPendingProviderOAuth,
   refreshOnboarding,
+  saveAistocEndpoint,
   saveOnboardingApiKey,
   setOnboardingMode,
   startManualOnboarding,
@@ -459,7 +461,21 @@ export function DesktopOnboardingOverlay({
             freeTierIntro ? (
               <FreeTierReadyPanel leaving={leaving} onDismiss={dismissFreeTierIntro} />
             ) : showPicker ? (
-              <Picker ctx={ctx} />
+              import.meta.env.VITE_AISTOC_BRAND === '1' && !onboarding.manual ? (
+                <AistocSetup
+                  save={async endpoint => {
+                    const result = await saveAistocEndpoint(endpoint, ctx)
+
+                    if (result.ok) {
+                      await refreshOnboarding(ctx)
+                    }
+
+                    return result
+                  }}
+                />
+              ) : (
+                <Picker ctx={ctx} />
+              )
             ) : (
               <FlowPanel ctx={ctx} flow={flow} leaving={leaving} onBegin={finalizeOnboarding} />
             )
