@@ -41,6 +41,10 @@ const releaseBuild = Boolean(process.env.HERMES_PAYLOAD_TAG)
 // AISTOC ships an offline single-file NSIS installer; keep MSIX the default so
 // the upstream build path is untouched unless the AISTOC build opts in.
 const aistocNsis = process.env.AISTOC_NSIS === '1'
+// Branded builds also carry the brand's company/description into package
+// metadata: shortcut tooltips and Add/Remove Programs read them.
+const aistocBranded = process.env.AISTOC_BRAND === '1'
+const aistocBrand = aistocBranded ? require('../../aistoc/branding/brand.json') : null
 
 /**
  * The store MSIX packaging identity. Callers must only invoke this when
@@ -110,6 +114,9 @@ module.exports = {
     // shipped stable default, but isolate nonstable userData from first access.
     // A stable-branded channel has no token and keeps stable's userData.
     ...((channelRequest && token) || appNamePascal !== artifactNamePascal ? { productName: displayName } : {}),
+    ...(aistocBrand
+      ? { author: aistocBrand.company, description: `${aistocBrand.productName} desktop client` }
+      : {}),
     desktopName: appId
   },
   directories: {
@@ -209,7 +216,7 @@ module.exports = {
     // paste onto the stock removable-drive icon). It lives in packaging/ with
     // the background so the `files` whitelist keeps it out of the app bundle.
     icon: 'packaging/dmg-volume.icns',
-    title: 'Hermes Agent Installer',
+    title: `${displayName} Installer`,
     // A prebuilt .tiff on purpose, not a PNG plus a @2x sibling: dmg-builder's
     // PNG path runs `tiffutil -cathidpicheck`, which on macOS 26 rewrites both
     // frames to 72 dpi and silently drops the 2x representation. A .tiff is
@@ -286,9 +293,14 @@ module.exports = {
     oneClick: false,
     perMachine: true,
     allowElevation: true,
-    allowToChangeInstallationDirectory: false,
-    createDesktopShortcut: true,
-    createStartMenuShortcut: true,
+    // AISTOC keeps the LOCALAPPDATA default from installer.nsh's preInit but
+    // lets the user pick another directory on the assisted installer's page.
+    allowToChangeInstallationDirectory: true,
+    // installer.nsh's components page creates these after the user chooses;
+    // the template's build-time creation would bypass that and (via the same
+    // DO_NOT_CREATE_* guard) also skip uninstall cleanup.
+    createDesktopShortcut: false,
+    createStartMenuShortcut: false,
     shortcutName: displayName,
     installerIcon: 'assets/icon.ico',
     uninstallerIcon: 'assets/icon.ico',

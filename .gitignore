@@ -332,3 +332,6 @@ native/fts5_cjk/*.so
 /pm/.lock.json.lock
 
 apps/desktop/.dist-build*
+
+# AISTOC installer build scratch (brand-asset backups, fetched catalogs)
+aistoc/.build-cache/

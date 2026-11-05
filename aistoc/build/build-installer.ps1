@@ -45,7 +45,7 @@ function Restore-Asset($Relative) {
   }
 }
 
-$Assets = @('assets\icon.ico', 'assets\icon.png', 'public\nous-girl.png', 'public\nous-girl-dark.png')
+$Assets = @('assets\icon.ico', 'assets\icon.png', 'public\nous-girl.png', 'public\nous-girl-dark.png', 'public\apple-touch-icon.png')
 
 Push-Location $Repo
 try {
@@ -73,6 +73,8 @@ try {
   Copy-Item (Join-Path $Icons 'icon.png') (Join-Path $Desktop 'assets\icon.png') -Force
   Copy-Item (Join-Path $Icons 'icon.png') (Join-Path $Desktop 'public\nous-girl.png') -Force
   Copy-Item (Join-Path $Icons 'icon.png') (Join-Path $Desktop 'public\nous-girl-dark.png') -Force
+  # Window icon, favicon and the onboarding provider row all read this file.
+  Copy-Item (Join-Path $Icons 'icon.png') (Join-Path $Desktop 'public\apple-touch-icon.png') -Force
 
   Step 'Cache catalog snapshots'
   node (Join-Path $Repo 'aistoc\build\fetch-catalog-snapshots.mjs')

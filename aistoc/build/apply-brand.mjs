@@ -15,10 +15,13 @@ export function rewriteBrandText(text, brand) {
 
 function targets() {
   const i18n = path.join(ROOT, 'apps', 'desktop', 'src', 'i18n')
+  // Every locale, not just en/zh: the shipped app can switch languages, and a
+  // leftover "Hermes Agent" is visible product naming, not a translation.
   const files = fs.readdirSync(i18n)
-    .filter(name => /^(en|zh)/.test(name) && name.endsWith('.ts'))
+    .filter(name => name.endsWith('.ts'))
     .map(name => path.join(i18n, name))
   files.push(path.join(ROOT, 'apps', 'desktop', 'index.html'))
+  files.push(path.join(ROOT, 'apps', 'desktop', 'src', 'components', 'chat', 'intro-copy.jsonl'))
   return files
 }
 

@@ -18,6 +18,7 @@ import type {
 import { atom, computed } from 'nanostores'
 
 import { getRuntimeI18nLocale } from '@/i18n/runtime'
+import { RECONNECT_ATTEMPT_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 import type { GatewayRequester } from '@/lib/yolo-session'
 
 import { ackFreeTierNotice } from './free-tier'
@@ -170,8 +171,16 @@ export async function startOnboarding(
 
     intro?.started(started)
 
-    // The chat is on screen before the run names it, so the presence never sees a gap.
-    await resume(started.stored_session_id, true)
+    // The chat is on screen before the run names it, so the presence never sees a gap. A first
+    // task whose model call cannot settle (offline install, no provider yet) must not wedge the
+    // intro on CONNECTING: `started` already cleared the intro's own way out, so this await needs
+    // a deadline of its own. Timing out takes the catch below, which fails the intro and
+    // releases the overlay.
+    await withTimeout(
+      resume(started.stored_session_id, true),
+      RECONNECT_ATTEMPT_TIMEOUT_MS,
+      'Timed out opening the onboarding chat'
+    )
     $onboardingSession.set({
       connectionId,
       runId: started.run_id,

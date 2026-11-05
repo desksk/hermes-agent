@@ -19,11 +19,12 @@ export function OnboardingSettings() {
     setStarting(true)
 
     // The whole first-run experience again: the boot overlay, the onboarding-sized window, the demo
-    // layout and the intro, in a new chat opened the way the launch opens it.
+    // layout and the intro, in a new chat opened the way the launch opens it. AISTOC has no
+    // free-tier intro (see wiring.tsx): passing none keeps its offline run from holding CONNECTING.
     const open = $onboardingChatOpener.get()
+    const intro = import.meta.env.VITE_AISTOC_BRAND === '1' ? undefined : firstRunIntro()
 
-    const started =
-      open !== null && (await startOnboarding(requestGateway, open, { intro: firstRunIntro(), rerun: true }))
+    const started = open !== null && (await startOnboarding(requestGateway, open, { intro, rerun: true }))
 
     setStarting(false)
 

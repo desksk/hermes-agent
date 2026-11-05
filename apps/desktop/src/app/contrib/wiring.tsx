@@ -226,7 +226,15 @@ function useFirstRunOnboarding(request: OnboardingRequest, open: OnboardingResum
     if (!isMainWindow()) {
       markOnboardingDecided()
     } else if (gatewayOpen) {
-      void decideOnboarding(request, open, { intro: firstRunIntro() })
+      if (import.meta.env.VITE_AISTOC_BRAND === '1') {
+        // AISTOC's first run is its own provider setup, not the upstream free-tier
+        // intro chat: that kickoff submits a turn, and offline there is no model to
+        // run it yet. Deciding immediately lets the setup overlay own the screen
+        // instead of holding the boot overlay on CONNECTING.
+        markOnboardingDecided()
+      } else {
+        void decideOnboarding(request, open, { intro: firstRunIntro() })
+      }
     }
   }, [gatewayOpen, open, request])
 

@@ -1,6 +1,8 @@
 import type { OnboardingStartParams } from '@hermes/shared'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { RECONNECT_ATTEMPT_TIMEOUT_MS } from '@/lib/with-timeout'
+
 import { setPrimaryGatewayConnectionId } from './gateway'
 import { $onboardingPhase } from './onboarding-phase'
 import { $onboardingDecided, $onboardingSurfaceClear } from './onboarding-presence'
@@ -226,6 +228,28 @@ describe('onboarding run', () => {
     exit()
 
     expect($onboardingDecided.get()).toBe(true)
+  })
+
+  it('fails the intro when the onboarding chat never opens', async () => {
+    const { request } = backend({ eligible: true, run: true })
+    const intro = { failed: vi.fn(), opened: vi.fn(), started: vi.fn(), starting: vi.fn() }
+    // The first task's model call can fail (offline, no provider yet) without
+    // settling the resume; the intro must not stay on CONNECTING forever.
+    const neverOpens = vi.fn(() => new Promise<void>(() => undefined))
+
+    vi.useFakeTimers()
+
+    try {
+      const started = startOnboarding(request, neverOpens, { ensureProfile, intro })
+      await vi.advanceTimersByTimeAsync(RECONNECT_ATTEMPT_TIMEOUT_MS + 1)
+
+      expect(await started).toBe(false)
+      expect(intro.started).toHaveBeenCalled()
+      expect(intro.opened).not.toHaveBeenCalled()
+      expect(intro.failed).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("keeps a rerun going when the old run's withdrawn card reports skipped_all first", async () => {
