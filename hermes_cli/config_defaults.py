@@ -2023,7 +2023,8 @@ DEFAULT_CONFIG = {
     # URL (falls back to the in-repo snapshot on network failure), so picker lists update without a
     # release. Default URL is served by the docs-site GitHub Pages deploy.
     "model_catalog": {
-        "enabled": True,
+        # AISTOC offline distribution: use the in-repo snapshot only.
+        "enabled": False,
         "url": "https://hermes-agent.nousresearch.com/docs/api/model-catalog.json",
         # Disk cache TTL in minutes. The gateway refreshes in the background on this cadence; the
         # CLI refetches on the next /model or `hermes model` once the cache is older. Network
@@ -2338,7 +2339,8 @@ DEFAULT_CONFIG = {
 
     "updates": {
         # Passive version/banner checks only; explicit `hermes update --check` remains enabled.
-        "check": True,
+        # AISTOC offline distribution: never phone home for updates.
+        "check": False,
         # Pre-update backup. quick = snapshot small critical state (pairing JSONs, cron jobs,
         # config.yaml, .env, auth.json, profile DBs) into <HERMES_HOME>/state-snapshots/, skipping
         # files >1 GiB; restore via ``/snapshot``. full = quick PLUS a ``hermes backup`` zip in
