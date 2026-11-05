@@ -57,6 +57,11 @@ class CustomEndpointUpdate(BaseModel):
     make_default: bool = False
     models: Optional[list[str]] = None
     model_details: Optional[list[CustomEndpointModelDetail]] = None
+    # Advanced fields for internal gateways (proxy auth tokens, private CAs). Values are
+    # normalized on write: None entries are dropped, so the payload type stays permissive.
+    extra_headers: Optional[dict[str, Any]] = None
+    ssl_verify: Optional[bool] = None
+    ssl_ca_cert: Optional[str] = None
 
 class MessagingPlatformUpdate(BaseModel):
     enabled: Optional[bool] = None

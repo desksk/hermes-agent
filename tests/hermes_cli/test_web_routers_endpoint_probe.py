@@ -56,7 +56,7 @@ def test_openai_base_url_probe_names_the_http_status_instead_of_no_models(monkey
         async def get(self, *a, **k):
             return _Resp()
 
-    monkeypatch.setattr(mod, "_endpoint_probe_client", lambda url, timeout: _Client())
+    monkeypatch.setattr(mod, "_endpoint_probe_client", lambda url, timeout, verify=True: _Client())
     monkeypatch.setattr(mod, "_require_token", lambda request: None)
 
     body = EnvVarUpdate(key="OPENAI_BASE_URL", value="http://127.0.0.1:8080/v1", api_key="")
@@ -94,7 +94,7 @@ def test_bare_root_probe_resolves_to_the_v1_base_that_served_models(route, monke
             seen.append(url)
             return _Resp(200 if url.endswith("/v1/models") else 404)
 
-    monkeypatch.setattr(mod, "_endpoint_probe_client", lambda url, timeout: _Client())
+    monkeypatch.setattr(mod, "_endpoint_probe_client", lambda url, timeout, verify=True: _Client())
     monkeypatch.setattr(mod, "_require_token", lambda request: None)
     if route == "/api/providers/validate":
         body = EnvVarUpdate(key="OPENAI_BASE_URL", value="http://127.0.0.1:39080/", api_key="")
@@ -132,7 +132,7 @@ def test_bare_root_probe_reports_the_v1_key_rejection_not_the_root_404(route, mo
         async def get(self, url, *a, **k):
             return _Resp(401 if url.endswith("/v1/models") else 404)
 
-    monkeypatch.setattr(mod, "_endpoint_probe_client", lambda url, timeout: _Client())
+    monkeypatch.setattr(mod, "_endpoint_probe_client", lambda url, timeout, verify=True: _Client())
     monkeypatch.setattr(mod, "_require_token", lambda request: None)
     if route == "/api/providers/validate":
         body = EnvVarUpdate(key="OPENAI_BASE_URL", value="http://127.0.0.1:39080", api_key="k")
@@ -174,7 +174,7 @@ def _models_probe_host(monkeypatch, content_type, body):
         async def post(self, url, *a, **k):
             return _Resp()
 
-    monkeypatch.setattr(mod, "_endpoint_probe_client", lambda url, timeout: _Client())
+    monkeypatch.setattr(mod, "_endpoint_probe_client", lambda url, timeout, verify=True: _Client())
 
 
 @pytest.mark.parametrize(

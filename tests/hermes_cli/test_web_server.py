@@ -1919,7 +1919,7 @@ CONFIG_SCHEMA = ProviderConfigSchema(
                 return FakeResp()
 
         @contextlib.asynccontextmanager
-        async def fake_probe_client(url, timeout):
+        async def fake_probe_client(url, timeout, verify=True):
             yield FakeClient()
 
         monkeypatch.setattr(config_env, "_endpoint_probe_client", fake_probe_client)
@@ -1956,7 +1956,7 @@ CONFIG_SCHEMA = ProviderConfigSchema(
                 return Resp(400 if url.endswith("/responses") else 404)
 
         @contextlib.asynccontextmanager
-        async def probe_client(url, timeout):
+        async def probe_client(url, timeout, verify=True):
             yield Client()
 
         monkeypatch.setattr(config_env, "_endpoint_probe_client", probe_client)

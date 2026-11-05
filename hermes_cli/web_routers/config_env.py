@@ -25,7 +25,7 @@ from hermes_cli.web_server_profiles import (
     _approval_mode_of, _broadcast_gateway_session_info, _is_other_profile, _parse_model_entries,
 )
 from fastapi import HTTPException, Request
-from hermes_cli.config import DEFAULT_CONFIG, OPTIONAL_ENV_VARS, read_raw_config, require_readable_config_before_write, custom_endpoint_key_env, coerce_provider_id, find_provider_entry, get_compatible_custom_providers, _ENV_REF_RE, _deep_merge
+from hermes_cli.config import DEFAULT_CONFIG, OPTIONAL_ENV_VARS, read_raw_config, require_readable_config_before_write, custom_endpoint_key_env, coerce_provider_id, find_provider_entry, get_compatible_custom_providers, _ENV_REF_RE, _deep_merge, normalize_extra_headers
 from hermes_cli.config_providers import _canonical_api_mode, _custom_provider_entry_to_provider_config
 from hermes_cli.web_models import ConfigUpdate, EnvVarUpdate, EnvVarDelete, EnvVarReveal, CustomEndpointUpdate
 from typing import Any, Dict, List, Optional, Tuple
@@ -462,6 +462,9 @@ def _endpoint_row(
         "api_mode": _endpoint_api_mode(key_entry),
         "context_length": context_length, "discover_models": discover_models,
         "has_api_key": has_api_key, "api_key_preview": api_key_preview,
+        "extra_headers": key_entry.get("extra_headers") or {},
+        "ssl_verify": key_entry.get("ssl_verify", True),
+        "ssl_ca_cert": key_entry.get("ssl_ca_cert") or "",
         "is_current": is_current, "source": source,
     }
 
@@ -634,6 +637,23 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
         "name": name, "base_url": base_url, "model": model,
         "discover_models": bool(body.discover_models),
     })
+    # Advanced gateway fields: ``None`` means an older UI payload and keeps whatever is
+    # hand-written; an explicit empty value clears the key. Headers pass through the same
+    # normalizer the runtime uses, so a blank/None entry never reaches the request.
+    if body.extra_headers is not None:
+        normalized = normalize_extra_headers(body.extra_headers)
+        if normalized:
+            entry["extra_headers"] = normalized
+        else:
+            entry.pop("extra_headers", None)
+    if body.ssl_verify is not None:
+        entry["ssl_verify"] = bool(body.ssl_verify)
+    if body.ssl_ca_cert is not None:
+        cert = body.ssl_ca_cert.strip()
+        if cert:
+            entry["ssl_ca_cert"] = cert
+        else:
+            entry.pop("ssl_ca_cert", None)
     # A Responses-only or Anthropic-compatible host 404s on the runtime's
     # Chat Completions default, so the panel pins the transport the same way
     # ``hermes model`` does (``api_mode``; the runtime also reads the v12
@@ -872,8 +892,17 @@ async def validate_custom_endpoint(body: CustomEndpointUpdate):
     headers = {"Accept": "application/json"}
     if body.api_key and body.api_key.strip():
         headers["Authorization"] = f"Bearer {body.api_key.strip()}"
+    headers.update(normalize_extra_headers(body.extra_headers))
 
-    resolved, resp = await _probe_openai_compatible_models(base_url, headers)
+    # A CA bundle wins over "skip verification"; both only affect this probe, and the
+    # saved provider entry carries them to the runtime through the same keys.
+    verify: Any = True
+    if body.ssl_ca_cert:
+        verify = body.ssl_ca_cert.strip()
+    elif body.ssl_verify is False:
+        verify = False
+
+    resolved, resp = await _probe_openai_compatible_models(base_url, headers, verify)
     if resp is None:
         return {"ok": False, "reachable": False, "message": f"Could not reach {base_url}/models.", "models": []}
     if resp.status_code in (401, 403):
@@ -899,7 +928,7 @@ async def validate_custom_endpoint(body: CustomEndpointUpdate):
     mode = _canonical_api_mode(body.api_mode or "").lower() or _auto_api_mode(resolved)
     probe_model = (body.model or "").strip() or (ids[0] if ids else "")
     try:
-        async with _endpoint_probe_client(resolved, 8.0) as client:
+        async with _endpoint_probe_client(resolved, 8.0, verify) as client:
             missing = await _probe_transport_route(client, resolved, mode, probe_model, headers)
     except Exception:
         missing = ""  # inconclusive (see _probe_transport_route): never block on a transport error
@@ -934,7 +963,7 @@ def _no_models_probe_message(resp: Any, base_url: str) -> str:
             "Start a model on that endpoint and try again.")
 
 
-async def _probe_openai_compatible_models(base_url: str, headers: Optional[dict]) -> tuple[str, Any]:
+async def _probe_openai_compatible_models(base_url: str, headers: Optional[dict], verify: Any = True) -> tuple[str, Any]:
     """GET ``{base}/models``, then ``{base}/v1/models`` (or the ``/v1``-stripped variant) when the
     first answers a non-success. Returns ``(resolved_base_url, response)`` — the base that served the
     model list is what the caller must PERSIST: the runtime appends ``/chat/completions`` to the saved
@@ -943,7 +972,7 @@ async def _probe_openai_compatible_models(base_url: str, headers: Optional[dict]
     base = base_url.rstrip("/")
     alternate = base[:-3].rstrip("/") if base.lower().endswith("/v1") else base + "/v1"
     resolved, resp = base, None
-    async with _endpoint_probe_client(base, 8.0) as client:
+    async with _endpoint_probe_client(base, 8.0, verify) as client:
         for candidate in (base, alternate):
             try:
                 candidate_resp = await client.get(candidate + "/models", headers=headers)
@@ -997,14 +1026,14 @@ async def _probe_transport_route(client, base_url: str, mode: str, model: str, h
             f"does not serve the {_TRANSPORT_LABELS[mode]} API. Pick the API mode it does serve.")
 
 
-def _endpoint_probe_client(url: str, timeout: float):
+def _endpoint_probe_client(url: str, timeout: float, verify: Any = True):
     """httpx client for a user-entered endpoint probe. Local endpoints (loopback, LAN, Tailscale)
     ignore ``HTTP(S)_PROXY``: httpx honours the env/system proxy but not its bypass list, so a
     system proxy (Clash on Windows, corporate) answered the ``127.0.0.1`` probe with its own error
     page and the GUI reported "advertised no models" while the CLI saw the model (#63472)."""
     import httpx
     from agent.model_metadata import is_local_endpoint
-    return httpx.AsyncClient(timeout=httpx.Timeout(timeout), trust_env=not is_local_endpoint(url))
+    return httpx.AsyncClient(timeout=httpx.Timeout(timeout), trust_env=not is_local_endpoint(url), verify=verify)
 
 
 @router.post("/api/providers/validate")
