@@ -2,7 +2,7 @@ import type { ModelOptionProvider } from '@hermes/shared'
 import { useStore } from '@nanostores/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { AistocSetup } from '@/aistoc/AistocSetup'
+import { AistocSetup, type AistocSetupResult } from '@/aistoc/AistocSetup'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
@@ -39,7 +39,7 @@ import {
   startProviderOAuth
 } from '@/store/onboarding'
 import { $onboardingSurfaces, onboardingSurfaceActive } from '@/store/onboarding-presence'
-import type { OAuthProvider } from '@/types/hermes'
+import type { CustomEndpointUpdate, OAuthProvider } from '@/types/hermes'
 
 import { DocsLink, FlowPanel, Status } from './flow'
 import { FreeTierSetupNotice } from './free-tier-setup-notice'
@@ -198,6 +198,29 @@ function useApiKeyCatalog(scope: OnboardingContext['scope']): ApiKeyOption[] {
 // text-out (360ms: CONNECTED fades down, rest scrambles+fades) → hold (300ms)
 // → surface-out (520ms, held back by [transition-delay:660ms]). Finalize after.
 const ONBOARDING_EXIT_MS = 1180
+
+function isAistocBrand(manual: boolean): boolean {
+  return import.meta.env.VITE_AISTOC_BRAND === '1' && !manual
+}
+
+async function saveAistocSetup(endpoint: CustomEndpointUpdate, ctx: OnboardingContext): Promise<AistocSetupResult> {
+  const result = await saveAistocEndpoint(endpoint, ctx)
+
+  if (result.ok) {
+    await refreshOnboarding(ctx)
+  }
+
+  return result
+}
+
+interface ProviderPickerPanelProps {
+  ctx: OnboardingContext
+  aistoc: boolean
+}
+
+function ProviderPickerPanel({ ctx, aistoc }: ProviderPickerPanelProps) {
+  return aistoc ? <AistocSetup save={endpoint => saveAistocSetup(endpoint, ctx)} /> : <Picker ctx={ctx} />
+}
 
 export function DesktopOnboardingOverlay({
   enabled,
@@ -461,21 +484,7 @@ export function DesktopOnboardingOverlay({
             freeTierIntro ? (
               <FreeTierReadyPanel leaving={leaving} onDismiss={dismissFreeTierIntro} />
             ) : showPicker ? (
-              import.meta.env.VITE_AISTOC_BRAND === '1' && !onboarding.manual ? (
-                <AistocSetup
-                  save={async endpoint => {
-                    const result = await saveAistocEndpoint(endpoint, ctx)
-
-                    if (result.ok) {
-                      await refreshOnboarding(ctx)
-                    }
-
-                    return result
-                  }}
-                />
-              ) : (
-                <Picker ctx={ctx} />
-              )
+              <ProviderPickerPanel aistoc={isAistocBrand(onboarding.manual)} ctx={ctx} />
             ) : (
               <FlowPanel ctx={ctx} flow={flow} leaving={leaving} onBegin={finalizeOnboarding} />
             )

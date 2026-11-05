@@ -578,7 +578,7 @@ def _detach_main_model_from_provider(cfg: dict[str, Any], provider_key: str, ent
     cfg["model"] = model_cfg
 
 
-def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> tuple[str, dict[str, Any]]:
+def _validated_custom_endpoint_fields(body: CustomEndpointUpdate) -> tuple[str, str, str]:
     name = (body.name or "").strip()
     base_url = (body.base_url or "").strip().rstrip("/")
     model = (body.model or "").strip()
@@ -595,13 +595,12 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
         raise HTTPException(status_code=400, detail="base_url must include scheme and host")
     if not model:
         raise HTTPException(status_code=400, detail="model required")
+    return name, base_url, model
 
-    # Deliver the bearer token through a named provider entry. A bare ``provider: custom`` cannot carry a
-    # credential for this host: OPENAI_API_KEY is deliberately gated to openai.com (#28660), so the token
-    # was dropped and requests went out as "no-key-required".
-    providers = cfg.get("providers")
-    if not isinstance(providers, dict):
-        providers = {}
+
+def _resolve_custom_endpoint_target(
+    cfg: dict[str, Any], providers: dict[str, Any], body: CustomEndpointUpdate,
+) -> tuple[str, dict[str, Any], Optional[str]]:
     # An edit payload carries the stored key verbatim; slugging it first would
     # miss the entry and fork a slugged twin next to the original.
     stored_key, existing = _resolve_custom_endpoint_entry(providers, body.id or body.name)
@@ -623,20 +622,10 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
             restored = cfg.get("custom_providers")
             if isinstance(restored, list):
                 restored.append(legacy)
-    if existing is None:
-        existing = {}
+    return endpoint_id, dict(existing) if existing is not None else {}, stored_key
 
 
-    # Merge onto the existing entry rather than replacing it: a providers.<name>
-    # block can carry hand-written keys the dashboard has no field for
-    # (``key_env``/``api_key_env``, ``extra_headers`` — possibly with
-    # credentials — ``request_overrides``); rebuilding from scratch silently
-    # dropped them on an unrelated edit.
-    entry: dict[str, Any] = dict(existing)
-    entry.update({
-        "name": name, "base_url": base_url, "model": model,
-        "discover_models": bool(body.discover_models),
-    })
+def _apply_custom_endpoint_advanced_fields(entry: dict[str, Any], body: CustomEndpointUpdate) -> None:
     # Advanced gateway fields: ``None`` means an older UI payload and keeps whatever is
     # hand-written; an explicit empty value clears the key. Headers pass through the same
     # normalizer the runtime uses, so a blank/None entry never reaches the request.
@@ -665,6 +654,11 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
             entry["api_mode"] = body.api_mode
         else:
             entry.pop("api_mode", None)
+
+
+def _merge_custom_endpoint_models(
+    entry: dict[str, Any], body: CustomEndpointUpdate, model: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     # Same for the model map, so existing models keep their context lengths.
     # ``body.models`` is the catalogue the panel's Test button discovered;
     # without it only the hand-typed model survived Save. A payload with no
@@ -687,6 +681,13 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
                                                   ("reasoning_effort", detail.reasoning_effort)) if v and v.strip()})
         models_map[model_id] = row
     entry["models"] = models_map
+    return details, models_map
+
+
+def _apply_reasoning_alias(
+    cfg: dict[str, Any], entry: dict[str, Any], details: dict[str, Any],
+    models_map: dict[str, Any], model: str,
+) -> str:
     # A reasoning alias is not a model the inference route accepts literally:
     # persist the canonical model and pin its effort through the one runtime
     # chokepoint (``agent.reasoning_overrides`` → ``resolve_reasoning_config``).
@@ -705,10 +706,12 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
         model = canonical
         entry["model"] = model
         models_map.setdefault(model, {})
-    if body.context_length and body.context_length > 0:
-        entry["context_length"] = int(body.context_length)
-        entry["models"][model]["context_length"] = int(body.context_length)
+    return model
 
+
+def _apply_custom_endpoint_key(
+    entry: dict[str, Any], endpoint_id: str, body: CustomEndpointUpdate,
+) -> None:
     # API keys never belong in config.yaml: write to .env and reference it via
     # ``key_env`` — the indirection built-in providers use and that
     # runtime_provider.py resolves at load time.
@@ -734,6 +737,37 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
         save_env_value(env_var, entry["api_key"].strip())
         entry["key_env"] = env_var
         entry.pop("api_key", None)
+
+
+def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> tuple[str, dict[str, Any]]:
+    name, base_url, model = _validated_custom_endpoint_fields(body)
+
+    # Deliver the bearer token through a named provider entry. A bare ``provider: custom`` cannot carry a
+    # credential for this host: OPENAI_API_KEY is deliberately gated to openai.com (#28660), so the token
+    # was dropped and requests went out as "no-key-required".
+    providers = cfg.get("providers")
+    if not isinstance(providers, dict):
+        providers = {}
+    endpoint_id, existing, stored_key = _resolve_custom_endpoint_target(cfg, providers, body)
+
+    # Merge onto the existing entry rather than replacing it: a providers.<name>
+    # block can carry hand-written keys the dashboard has no field for
+    # (``key_env``/``api_key_env``, ``extra_headers`` — possibly with
+    # credentials — ``request_overrides``); rebuilding from scratch silently
+    # dropped them on an unrelated edit.
+    entry: dict[str, Any] = dict(existing)
+    entry.update({
+        "name": name, "base_url": base_url, "model": model,
+        "discover_models": bool(body.discover_models),
+    })
+    _apply_custom_endpoint_advanced_fields(entry, body)
+    details, models_map = _merge_custom_endpoint_models(entry, body, model)
+    model = _apply_reasoning_alias(cfg, entry, details, models_map, model)
+    if body.context_length and body.context_length > 0:
+        entry["context_length"] = int(body.context_length)
+        entry["models"][model]["context_length"] = int(body.context_length)
+
+    _apply_custom_endpoint_key(entry, endpoint_id, body)
 
     if stored_key is not None and stored_key != endpoint_id:
         providers.pop(stored_key, None)
