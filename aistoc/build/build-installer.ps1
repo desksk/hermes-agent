@@ -23,6 +23,20 @@ $PayloadDir = Join-Path $Desktop 'build\agent-payload'
 # both the workspace install (electron's postinstall) and electron-builder.
 $env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
 
+# AISTOC ships an offline desktop agent, not a local-inference or automation
+# workstation: keep the core tools and common Python capabilities, drop the
+# heavy optional stacks. Chromium stays — browser automation is a primary
+# workflow and the installer still fits the NSIS limit with it. Unset
+# (upstream builds) still stages everything.
+$env:AISTOC_PAYLOAD_SKIP_TOOLS = @(
+  'llamacpp-cuda', 'llamacpp-hip', 'llamacpp-vulkan', 'llamacpp-cpu',
+  'ffmpeg', 'cua-driver', 'gh', 'bws'
+) -join ','
+$env:AISTOC_PAYLOAD_EXTRAS = @(
+  'acp', 'anthropic', 'cron', 'mcp', 'keychain', 'pty', 'vision',
+  'documents', 'documents-pdf', 'doc-extract', 'web', 'ddgs'
+) -join ','
+
 function Step($Message) { Write-Host "==> $Message" -ForegroundColor Cyan }
 
 # $ErrorActionPreference does not cover native exit codes in PowerShell 7, so

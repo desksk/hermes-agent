@@ -17,6 +17,22 @@ from pm.lock import Facts
 from pm.registry import get_package, walk
 from pm.store import current_target
 
+def _payload_selection(name: str) -> set[str] | None:
+    """AISTOC distribution trimming; unset keeps upstream's full payload."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+def _payload_skip_tools() -> set[str]:
+    skip = _payload_selection("AISTOC_PAYLOAD_SKIP_TOOLS") or set()
+    # The staged venv is built ON the bundled interpreter; dropping it leaves
+    # the payload with nothing to run.
+    skip.discard("python")
+    return skip
+
+
 def _bundle_package_names() -> list[str]:
     names = [
         n
@@ -25,7 +41,8 @@ def _bundle_package_names() -> list[str]:
     ]
     if "python" not in names:
         names.append("python")
-    return names
+    skip = _payload_skip_tools()
+    return [n for n in names if n not in skip]
 
 
 def _arch_guard(store_dir: Path) -> list[str]:
@@ -194,6 +211,9 @@ def _prepare_native(*, out: Path, ref: str, source: Path, cache: Path,
         n for n in _bundle_package_names()
         if get_package(n).missing_reason(current_target()) is None
     ]
+    skipped = sorted(_payload_skip_tools() & set(_lockfile().names()))
+    if skipped:
+        print(f"  payload: skipping tools ({', '.join(skipped)})", flush=True)
     from pm import prepare_tools, stage_tools
 
     with _phase(f"preparing {len(names)} pinned tools"):
@@ -238,10 +258,19 @@ def _prepare_native(*, out: Path, ref: str, source: Path, cache: Path,
     from pm import build_environment
 
     # Cold native wheels need a larger budget than interactive installs.
+    # AISTOC pins an explicit extra list to keep the installer small; unset
+    # keeps upstream's all-extras payload.
+    payload_extras = _payload_selection("AISTOC_PAYLOAD_EXTRAS")
+    if payload_extras is None:
+        extras_kwargs = {"all_extras": True}
+        extras_note = "all extras"
+    else:
+        extras_kwargs = {"extras": sorted(payload_extras)}
+        extras_note = f"{len(payload_extras)} selected extras"
     build_environment(source=repo_dir, python=python_bin, out=venv_dir,
-                      env=env, cache=cache, all_extras=True, sealed=True, explicit=True,
-                      timeout=2 * 60 * 60)
-    print("✓ venv (all extras, on the staged interpreter)")
+                      env=env, cache=cache, sealed=True, explicit=True,
+                      timeout=2 * 60 * 60, **extras_kwargs)
+    print(f"✓ venv ({extras_note}, on the staged interpreter)")
 
     # Inventory the staged interpreter before publishing the bundle contract.
     from pm.features import installed_extras, write_features
