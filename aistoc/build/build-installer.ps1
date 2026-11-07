@@ -59,7 +59,30 @@ function Restore-Asset($Relative) {
   }
 }
 
-$Assets = @('assets\icon.ico', 'assets\icon.png', 'public\nous-girl.png', 'public\nous-girl-dark.png', 'public\apple-touch-icon.png')
+function Backup-AssetDir($Relative) {
+  $Source = Join-Path $Desktop $Relative
+  if (-not (Test-Path $Source)) { return }
+  $Target = Join-Path $Cache $Relative
+  New-Item -ItemType Directory -Force $Target | Out-Null
+  Copy-Item (Join-Path $Source '*') $Target -Recurse -Force
+}
+
+function Restore-AssetDir($Relative) {
+  $Source = Join-Path $Cache $Relative
+  if (Test-Path $Source) {
+    Copy-Item (Join-Path $Source '*') (Join-Path $Desktop $Relative) -Recurse -Force
+  }
+}
+
+# Every image carrying upstream brand art. Most are never drawn on Windows,
+# but all of them ship inside the app, so none may keep the Hermes mark.
+$Assets = @(
+  'assets\icon.ico', 'assets\icon.png', 'assets\icon-dark.ico', 'assets\icon-dark.png',
+  'assets\icon-mac.png', 'assets\icon.icns',
+  'public\nous-girl.png', 'public\nous-girl-dark.png', 'public\apple-touch-icon.png',
+  'public\hermes.png', 'public\hermes-sprite.png'
+)
+$AssetDirs = @('public\hermes-frames', 'assets\appx', 'assets\icon.icon')
 
 Push-Location $Repo
 try {
@@ -79,16 +102,26 @@ try {
   Step 'Back up upstream brand assets'
   New-Item -ItemType Directory -Force $Cache | Out-Null
   foreach ($asset in $Assets) { Backup-Asset $asset }
+  foreach ($dir in $AssetDirs) { Backup-AssetDir $dir }
 
   Step 'Generate brand icons'
   & $Python (Join-Path $Repo 'aistoc\branding\make_icons.py')
   Assert-ExitCode 'make_icons.py'
   Copy-Item (Join-Path $Icons 'icon.ico') (Join-Path $Desktop 'assets\icon.ico') -Force
-  Copy-Item (Join-Path $Icons 'icon.png') (Join-Path $Desktop 'assets\icon.png') -Force
-  Copy-Item (Join-Path $Icons 'icon.png') (Join-Path $Desktop 'public\nous-girl.png') -Force
-  Copy-Item (Join-Path $Icons 'icon.png') (Join-Path $Desktop 'public\nous-girl-dark.png') -Force
-  # Window icon, favicon and the onboarding provider row all read this file.
-  Copy-Item (Join-Path $Icons 'icon.png') (Join-Path $Desktop 'public\apple-touch-icon.png') -Force
+  $Png = Join-Path $Icons 'icon.png'
+  $Ico = Join-Path $Icons 'icon.ico'
+  foreach ($asset in $Assets) {
+    if ($asset -eq 'assets\icon.ico') { continue }
+    $source = if ($asset.EndsWith('.ico')) { $Ico } else { $Png }
+    Copy-Item $source (Join-Path $Desktop $asset) -Force
+  }
+  foreach ($dir in $AssetDirs) {
+    Get-ChildItem (Join-Path $Desktop $dir) -Recurse -File -Include *.png, *.jpg, *.ico |
+      ForEach-Object {
+        $source = if ($_.Extension -eq '.ico') { $Ico } else { $Png }
+        Copy-Item $source $_.FullName -Force
+      }
+  }
 
   Step 'Cache catalog snapshots'
   node (Join-Path $Repo 'aistoc\build\fetch-catalog-snapshots.mjs')
@@ -152,6 +185,7 @@ try {
       Assert-ExitCode 'apply-brand.mjs restore'
     } finally {
       foreach ($asset in $Assets) { Restore-Asset $asset }
+      foreach ($dir in $AssetDirs) { Restore-AssetDir $dir }
       Remove-Item (Join-Path $Desktop 'public\aistoc-catalog') -Recurse -Force -ErrorAction SilentlyContinue
     }
   }
