@@ -13,12 +13,12 @@ export function rewriteBrandText(text, brand) {
     .replace(/\bHermes\b/g, brand.name)
 }
 
-function sourceFiles(dir, out = []) {
+function walkFiles(dir, extensions, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) {
-      if (entry.name !== 'node_modules' && entry.name !== 'dist') sourceFiles(full, out)
-    } else if (/\.(ts|tsx)$/.test(entry.name) && !/\.(test|spec)\./.test(entry.name)) {
+      if (entry.name !== 'node_modules' && entry.name !== 'dist') walkFiles(full, extensions, out)
+    } else if (extensions.test(entry.name) && !/\.(test|spec)\./.test(entry.name)) {
       out.push(full)
     }
   }
@@ -39,7 +39,12 @@ function targets() {
   // titles, not only in the i18n tables. `\bHermes\b` cannot touch identifiers
   // such as HermesGateway or useHermesConfig, so the whole source tree is safe.
   for (const dir of ['src', 'electron']) {
-    for (const file of sourceFiles(path.join(ROOT, 'apps', 'desktop', dir))) files.add(file)
+    for (const file of walkFiles(path.join(ROOT, 'apps', 'desktop', dir), /\.(ts|tsx)$/)) files.add(file)
+  }
+  // The capability catalog renders skill/plugin descriptions verbatim.
+  const catalog = path.join(ROOT, 'apps', 'desktop', 'public', 'aistoc-catalog')
+  if (fs.existsSync(catalog)) {
+    for (const file of walkFiles(catalog, /\.json$/)) files.add(file)
   }
   return [...files]
 }
