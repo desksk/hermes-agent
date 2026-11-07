@@ -115,7 +115,14 @@ module.exports = {
     // A stable-branded channel has no token and keeps stable's userData.
     ...((channelRequest && token) || appNamePascal !== artifactNamePascal ? { productName: displayName } : {}),
     ...(aistocBrand
-      ? { author: aistocBrand.company, description: `${aistocBrand.productName} desktop client` }
+      ? {
+          // electron-builder reads CompanyName (PE version resource,
+          // Add/Remove Programs, file properties) from `author.name`, so the
+          // brand needs an object here — a bare string leaves companyName null
+          // and the exe keeps the upstream author's name.
+          author: { name: aistocBrand.company },
+          description: `${aistocBrand.productName} desktop client`
+        }
       : {}),
     desktopName: appId
   },

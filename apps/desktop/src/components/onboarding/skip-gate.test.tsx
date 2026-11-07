@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { $desktopOnboarding, type DesktopOnboardingState, type OnboardingContext } from '@/store/onboarding'
 import { markOnboardingDecided } from '@/store/onboarding-presence'
@@ -34,6 +34,7 @@ function skippedState(overrides: Partial<DesktopOnboardingState> = {}): DesktopO
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllEnvs()
 
   try {
     window.localStorage.clear()
@@ -62,5 +63,14 @@ describe('DesktopOnboardingOverlay first-run skip gate', () => {
     render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={pendingGateway} />)
 
     expect(screen.getByText(HEADER)).toBeTruthy()
+  })
+
+  it('ignores a durable skip on AISTOC and keeps guiding to a default model', () => {
+    vi.stubEnv('VITE_AISTOC_BRAND', '1')
+    $desktopOnboarding.set(skippedState())
+
+    render(<DesktopOnboardingOverlay enabled profile="default" requestGateway={pendingGateway} />)
+
+    expect(screen.getByText('连接你的模型服务')).toBeTruthy()
   })
 })

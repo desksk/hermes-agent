@@ -403,7 +403,17 @@ export function DesktopOnboardingOverlay({
   // reported a provider setup error), never by a passive readiness round. Now
   // that the skip is durable, without this a genuinely broken provider could
   // leave the user with a prompt that silently refuses to send and no picker.
-  if (onboarding.firstRunSkipped && !onboarding.requested && !onboarding.manual && !onboarding.freeTierReady) {
+  // AISTOC has no "I'll choose a provider later": without a default model the
+  // app cannot do anything, so every launch keeps guiding the user until one
+  // is configured. Ignore any durable skip left by an upstream-brand build.
+  const aistocBrand = import.meta.env.VITE_AISTOC_BRAND === '1'
+  if (
+    !aistocBrand &&
+    onboarding.firstRunSkipped &&
+    !onboarding.requested &&
+    !onboarding.manual &&
+    !onboarding.freeTierReady
+  ) {
     return null
   }
 
